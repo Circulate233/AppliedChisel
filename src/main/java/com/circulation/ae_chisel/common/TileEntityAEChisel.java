@@ -6,6 +6,7 @@ import appeng.api.config.Upgrades;
 import appeng.api.networking.crafting.ICraftingLink;
 import appeng.api.networking.crafting.ICraftingPatternDetails;
 import appeng.api.networking.crafting.ICraftingProviderHelper;
+import appeng.api.networking.energy.IEnergyGrid;
 import appeng.api.networking.events.MENetworkChannelsChanged;
 import appeng.api.networking.events.MENetworkCraftingPatternChange;
 import appeng.api.networking.events.MENetworkEventSubscribe;
@@ -23,16 +24,20 @@ import appeng.me.GridAccessException;
 import appeng.me.helpers.MachineSource;
 import appeng.tile.grid.AENetworkInvTile;
 import appeng.tile.inventory.AppEngInternalInventory;
+import appeng.util.Platform;
 import appeng.util.inv.InvOperation;
 import appeng.util.item.AEItemStack;
+import appeng.util.item.ItemList;
 import com.circulation.ae_chisel.utils.ChiselPatternDetails;
 import com.google.common.collect.ImmutableSet;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
+import net.minecraft.util.ITickable;
 import net.minecraftforge.items.IItemHandler;
 import org.jetbrains.annotations.NotNull;
 import team.chisel.api.carving.CarvingUtils;
@@ -40,12 +45,13 @@ import team.chisel.api.carving.CarvingUtils;
 import java.util.EnumSet;
 import java.util.List;
 
-public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHost {
+public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHost, ITickable {
 
     protected final DualityInterface duality = new DualityInterface(this.getProxy(), this);
     protected final AppEngInternalInventory inv = new AppEngInternalInventory(this, 1, 1);
     protected final MachineSource source = new MachineSource(this);
     protected final List<ICraftingPatternDetails> patterns = new ObjectArrayList<>();
+    protected final ItemList cache = new ItemList();
 
     public TileEntityAEChisel() {
         this.getProxy().setIdlePowerUsage(100);
@@ -91,11 +97,22 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
     @Override
     @NotNull
     public NBTTagCompound writeToNBT(NBTTagCompound data) {
+        NBTTagList list = new NBTTagList();
+        for (var stack : cache) {
+            NBTTagCompound nbt = new NBTTagCompound();
+            stack.writeToNBT(nbt);
+            list.appendTag(nbt);
+        }
+        data.setTag("cacheItems", list);
         return super.writeToNBT(data);
     }
 
     @Override
     public void readFromNBT(NBTTagCompound data) {
+        var list = data.getTagList("cacheItems", 10);
+        for (var nbtBase : list) {
+            cache.addStorage(AEItemStack.fromNBT((NBTTagCompound) nbtBase));
+        }
         super.readFromNBT(data);
     }
 
@@ -140,20 +157,8 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
             if (input.isEmpty()) continue;
             if (inputD.isItemEqual(input)) {
                 var out = details.getCondensedOutputs()[0].copy().setStackSize(input.getCount());
-                try {
-                    IStorageGrid grid = this.getProxy().getGrid().getCache(IStorageGrid.class);
-                    var storage = grid.getInventory(AEApi.instance().storage().getStorageChannel(IItemStorageChannel.class));
-                    var newItem = storage.injectItems(out, Actionable.MODULATE, source);
-                    if (newItem == null) {
-                        input.setCount(0);
-                        return true;
-                    } else {
-                        input.setCount((int) (out.getStackSize() - newItem.getStackSize()));
-                        return false;
-                    }
-                } catch (GridAccessException e) {
-                    return false;
-                }
+                cache.addStorage(out);
+                return true;
             }
         }
         return false;
@@ -193,5 +198,33 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
     @NotNull
     public AECableType getCableConnectionType(@NotNull AEPartLocation dir) {
         return AECableType.SMART;
+    }
+
+    @Override
+    public void update() {
+        if (cache.isEmpty()) return;
+        try {
+            var grid = this.getProxy().getGrid();
+            IEnergyGrid energyGrid = grid.getCache(IEnergyGrid.class);
+            IStorageGrid storageGrid = grid.getCache(IStorageGrid.class);
+            var storage = storageGrid.getInventory(AEApi.instance().storage().getStorageChannel(IItemStorageChannel.class));
+            ItemList o = null;
+            for (var stack : cache) {
+                if (stack == null || stack.getStackSize() == 0) return;
+                var newItem = Platform.poweredInsert(energyGrid, storage, stack, source, Actionable.MODULATE);
+                if (newItem != null && newItem.getStackSize() != 0) {
+                    if (o == null) o = new ItemList();
+                    o.addStorage(newItem);
+                }
+            }
+            cache.resetStatus();
+            if (o != null) {
+                for (var stack : o) {
+                    cache.addStorage(stack);
+                }
+            }
+        } catch (GridAccessException ignored) {
+
+        }
     }
 }
