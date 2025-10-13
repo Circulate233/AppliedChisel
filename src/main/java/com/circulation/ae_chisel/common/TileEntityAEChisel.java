@@ -38,6 +38,7 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ITickable;
+import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.items.IItemHandler;
 import org.jetbrains.annotations.NotNull;
 import team.chisel.api.carving.CarvingUtils;
@@ -198,6 +199,16 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
     @NotNull
     public AECableType getCableConnectionType(@NotNull AEPartLocation dir) {
         return AECableType.SMART;
+    }
+
+    @Override
+    public boolean hasCapability(Capability<?> capability, EnumFacing facing) {
+        return false;
+    }
+
+    @Override
+    public <T> T getCapability(Capability<T> capability, EnumFacing facing) {
+        return null;
     }
 
     @Override
