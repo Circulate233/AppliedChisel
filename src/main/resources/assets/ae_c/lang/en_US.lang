@@ -1,0 +1,11 @@
+text.punish.level.0=此配方将在温度抵达极限时停止
+text.punish.level.1=此配方将在温度抵达极限时继续消耗材料
+text.punish.level.2=此配方将在温度抵达极限时破坏机器结构
+text.punish.level.3=此配方将在温度抵达极限时引发一场剧烈的爆炸
+
+text.heat_demand=此配方需要在%sK到%sK温度间工作
+
+text.heat_chance.true=此配方会增加%sK温度
+text.heat_chance.false=此配方会降低%sK温度
+
+thread.thermodynamics=热能核心
