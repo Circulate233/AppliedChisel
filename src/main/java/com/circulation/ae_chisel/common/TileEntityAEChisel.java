@@ -76,7 +76,10 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
 
     @Override
     public void onChangeInventory(IItemHandler inv, int slot, InvOperation invOperation, ItemStack removed, ItemStack added) {
-        patterns.clear();
+        var empty = false;
+        if (patterns.isEmpty()) {
+            empty = true;
+        } else patterns.clear();
         if (!added.isEmpty()) {
             var r = CarvingUtils.getChiselRegistry();
             if (r == null) throw new RuntimeException("Chisel Registry is Null!");
@@ -85,6 +88,12 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
             for (var itemStack : r.getItemsForChiseling(added)) {
                 if (!input.equals(itemStack)) {
                     patterns.add(new ChiselPatternDetails(input, itemStack));
+                }
+            }
+            if (patterns.isEmpty()) {
+                this.inv.setStackInSlot(0, ItemStack.EMPTY);
+                if (empty) {
+                    return;
                 }
             }
         }
@@ -110,6 +119,7 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
 
     @Override
     public void readFromNBT(NBTTagCompound data) {
+        cache.resetStatus();
         var list = data.getTagList("cacheItems", 10);
         for (var nbtBase : list) {
             cache.addStorage(AEItemStack.fromNBT((NBTTagCompound) nbtBase));
@@ -122,9 +132,11 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
         return duality;
     }
 
+    private final EnumSet<EnumFacing> targets = EnumSet.allOf(EnumFacing.class);
+
     @Override
     public EnumSet<EnumFacing> getTargets() {
-        return EnumSet.allOf(EnumFacing.class);
+        return targets;
     }
 
     @Override

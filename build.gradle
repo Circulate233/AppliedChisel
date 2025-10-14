@@ -1,6 +1,7 @@
 /**
  * It is advised that you do not edit anything in the build.gradle; unless you are sure of what you are doing
  */
+//file:noinspection GroovyAssignabilityCheck
 
 import com.gtnewhorizons.retrofuturagradle.mcp.InjectTagsTask
 import org.jetbrains.changelog.Changelog
@@ -203,9 +204,10 @@ dependencies {
     compileOnly("org.projectlombok:lombok:1.18.24")
     annotationProcessor("org.projectlombok:lombok:1.18.24")
 
-    runtimeOnly rfg.deobf("curse.maven:ctm-267602:2915363")
-    implementation rfg.deobf("curse.maven:ae2-extended-life-570458:6302098")
-    implementation rfg.deobf("curse.maven:chisel-235279:2915375")
+    compileOnly(rfg.deobf("curse.maven:had-enough-items-557549:7057606"))
+    runtimeOnly(rfg.deobf("curse.maven:ctm-267602:2915363"))
+    implementation(rfg.deobf("curse.maven:ae2-extended-life-570458:6302098"))
+    implementation(rfg.deobf("curse.maven:chisel-235279:2915375"))
 }
 
 apply from: 'gradle/scripts/dependencies.gradle'
