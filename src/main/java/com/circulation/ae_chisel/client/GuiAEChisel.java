@@ -12,9 +12,11 @@ import com.circulation.ae_chisel.common.TileEntityAEChisel;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMaps;
 import it.unimi.dsi.fastutil.objects.ObjectLists;
 import mezz.jei.api.gui.IGhostIngredientHandler;
+import net.minecraft.client.resources.I18n;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
+import net.minecraftforge.fml.common.Optional;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.jetbrains.annotations.NotNull;
@@ -25,6 +27,10 @@ import java.util.List;
 import java.util.Map;
 
 @SideOnly(Side.CLIENT)
+@Optional.Interface(
+        iface = "appeng.container.interfaces.IJEIGhostIngredients",
+        modid = "jei"
+)
 public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
 
     public GuiAEChisel(InventoryPlayer inventoryPlayer, TileEntityAEChisel te) {
@@ -34,7 +40,7 @@ public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
 
     @Override
     public void drawFG(int offsetX, int offsetY, int mouseX, int mouseY) {
-        this.fontRenderer.drawString(this.getGuiDisplayName(GuiText.Chest.getLocal()), 8, 6, 4210752);
+        this.fontRenderer.drawString(this.getGuiDisplayName(I18n.format("tile.ae_chisel.ae_chisel.name")), 8, 6, 4210752);
         this.fontRenderer.drawString(GuiText.inventory.getLocal(), 8, this.ySize - 96 + 3, 4210752);
     }
 
@@ -44,9 +50,10 @@ public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
         this.drawTexturedModalRect(offsetX, offsetY, 0, 0, this.xSize, this.ySize);
     }
 
-    private Map<IGhostIngredientHandler.Target<?>, Object> slotMap = Object2ObjectMaps.emptyMap();
+    private Map<?,?> slotMap = Object2ObjectMaps.emptyMap();
 
     @Override
+    @Optional.Method(modid = "jei")
     public List<IGhostIngredientHandler.Target<?>> getPhantomTargets(Object ingredient) {
         if (ingredient instanceof ItemStack itemStack) {
             for (final Slot slot : this.inventorySlots.inventorySlots) {
@@ -74,8 +81,10 @@ public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
         return ObjectLists.emptyList();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
+    @Optional.Method(modid = "jei")
     public Map<IGhostIngredientHandler.Target<?>, Object> getFakeSlotTargetMap() {
-        return slotMap;
+        return (Map<IGhostIngredientHandler.Target<?>, Object>) slotMap;
     }
 }
