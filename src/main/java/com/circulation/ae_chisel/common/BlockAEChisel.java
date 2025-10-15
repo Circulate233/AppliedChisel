@@ -17,10 +17,9 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Objects;
-
 import static com.circulation.ae_chisel.AppliedChisel.MOD_ID;
 
+//错误的破坏粒子效果
 public class BlockAEChisel extends AEBaseTileBlock {
 
     private static final CreativeTabs creativeTab = new CreativeTabs(MOD_ID) {
@@ -31,26 +30,24 @@ public class BlockAEChisel extends AEBaseTileBlock {
         }
     };
 
+    @Getter
+    private static final ResourceLocation rl = new ResourceLocation(MOD_ID, "ae_chisel");
+    @Getter
     private static final BlockAEChisel INSTANCE = new BlockAEChisel();
     @Getter
-    private static final Item ITEM_BLOCK = new ItemBlock(BlockAEChisel.getInstance()).setRegistryName(Objects.requireNonNull(INSTANCE.getRegistryName()));
-
-    @NotNull
-    public static BlockAEChisel getInstance(){
-        return INSTANCE;
-    }
+    private static final Item ITEM_BLOCK = new ItemBlock(INSTANCE).setTranslationKey(MOD_ID + '.' + "ae_chisel").setCreativeTab(creativeTab).setRegistryName(rl);
 
     protected BlockAEChisel() {
         super(Material.SPONGE);
         this.setTileEntity(TileEntityAEChisel.class);
-        setRegistryName(new ResourceLocation(MOD_ID, "ae_chisel"));
+        setRegistryName(rl);
         setTranslationKey(MOD_ID + '.' + "ae_chisel");
         setCreativeTab(creativeTab);
     }
 
     @Override
     public boolean onBlockActivated(World world, BlockPos pos, IBlockState state, EntityPlayer player, EnumHand hand, EnumFacing facing, float hitX, float hitY, float hitZ) {
-        if (world.getTileEntity(pos) instanceof TileEntityAEChisel){
+        if (world.getTileEntity(pos) instanceof TileEntityAEChisel) {
             if (!super.onBlockActivated(world, pos, state, player, hand, facing, hitX, hitY, hitZ)) {
                 player.openGui(AppliedChisel.instance, 0, world, pos.getX(), pos.getY(), pos.getZ());
             }

@@ -5,8 +5,6 @@ import net.minecraft.launchwrapper.LogWrapper;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.SidedProxy;
-import net.minecraftforge.fml.common.event.FMLInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.network.NetworkRegistry;
 import net.minecraftforge.fml.common.network.simpleimpl.SimpleNetworkWrapper;
@@ -37,16 +35,6 @@ public class AppliedChisel {
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         proxy.preInit();
-    }
-
-    @Mod.EventHandler
-    public void init(FMLInitializationEvent event) {
-        proxy.init();
-    }
-
-    @Mod.EventHandler
-    public void postInit(FMLPostInitializationEvent event) {
-        proxy.postInit();
     }
 
 }

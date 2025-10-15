@@ -4,32 +4,35 @@ import com.circulation.ae_chisel.AppliedChisel;
 import com.circulation.ae_chisel.client.ContainerAEChisel;
 import com.circulation.ae_chisel.common.BlockAEChisel;
 import com.circulation.ae_chisel.common.TileEntityAEChisel;
+import net.minecraft.block.Block;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.Item;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.RegistryEvent;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.network.IGuiHandler;
 import net.minecraftforge.fml.common.network.NetworkRegistry;
-import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import net.minecraftforge.fml.common.registry.GameRegistry;
 import org.jetbrains.annotations.Nullable;
-
-import java.util.Objects;
 
 public class CommonProxy implements IGuiHandler {
 
     public void preInit() {
+        MinecraftForge.EVENT_BUS.register(this);
         NetworkRegistry.INSTANCE.registerGuiHandler(AppliedChisel.instance, this);
-        ForgeRegistries.BLOCKS.register(BlockAEChisel.getInstance());
-        var rl = Objects.requireNonNull(BlockAEChisel.getInstance().getRegistryName());
-        ForgeRegistries.ITEMS.register(BlockAEChisel.getITEM_BLOCK());
-        GameRegistry.registerTileEntity(TileEntityAEChisel.class, rl);
+        GameRegistry.registerTileEntity(TileEntityAEChisel.class, BlockAEChisel.getRl());
     }
 
-    public void init() {
+    @SubscribeEvent
+    public void registerBlocks(RegistryEvent.Register<Block> event) {
+        event.getRegistry().register(BlockAEChisel.getINSTANCE());
     }
 
-    public void postInit() {
-
+    @SubscribeEvent
+    public void registerItems(RegistryEvent.Register<Item> event) {
+        event.getRegistry().register(BlockAEChisel.getITEM_BLOCK());
     }
 
     @Override
