@@ -3,6 +3,7 @@ package com.circulation.ae_chisel.common;
 import appeng.api.AEApi;
 import appeng.api.config.Actionable;
 import appeng.api.config.Upgrades;
+import appeng.api.networking.IGridNode;
 import appeng.api.networking.crafting.ICraftingLink;
 import appeng.api.networking.crafting.ICraftingPatternDetails;
 import appeng.api.networking.crafting.ICraftingProviderHelper;
@@ -12,6 +13,9 @@ import appeng.api.networking.events.MENetworkCraftingPatternChange;
 import appeng.api.networking.events.MENetworkEventSubscribe;
 import appeng.api.networking.events.MENetworkPowerStatusChange;
 import appeng.api.networking.storage.IStorageGrid;
+import appeng.api.networking.ticking.IGridTickable;
+import appeng.api.networking.ticking.TickRateModulation;
+import appeng.api.networking.ticking.TickingRequest;
 import appeng.api.storage.channels.IItemStorageChannel;
 import appeng.api.storage.data.IAEItemStack;
 import appeng.api.util.AECableType;
@@ -20,7 +24,6 @@ import appeng.api.util.DimensionalCoord;
 import appeng.api.util.IConfigManager;
 import appeng.helpers.DualityInterface;
 import appeng.helpers.IInterfaceHost;
-import appeng.me.GridAccessException;
 import appeng.me.helpers.MachineSource;
 import appeng.tile.grid.AENetworkInvTile;
 import appeng.tile.inventory.AppEngInternalInventory;
@@ -37,7 +40,6 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
-import net.minecraft.util.ITickable;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.items.IItemHandler;
 import org.jetbrains.annotations.NotNull;
@@ -46,16 +48,20 @@ import team.chisel.api.carving.CarvingUtils;
 import java.util.EnumSet;
 import java.util.List;
 
-public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHost, ITickable {
+public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHost, IGridTickable {
 
     protected final DualityInterface duality = new DualityInterface(this.getProxy(), this);
     protected final AppEngInternalInventory inv = new AppEngInternalInventory(this, 1, 1);
     protected final MachineSource source = new MachineSource(this);
-    protected final List<ICraftingPatternDetails> patterns = new ObjectArrayList<>();
+    protected final List<ChiselPatternDetails> patterns = new ObjectArrayList<>();
     protected final ItemList cache = new ItemList();
 
-    public TileEntityAEChisel() {
-        this.getProxy().setIdlePowerUsage(100);
+    private static final EnumSet<EnumFacing> sides = EnumSet.complementOf(EnumSet.of(EnumFacing.UP));
+
+    public void onReady() {
+        super.onReady();
+        this.getProxy().setIdlePowerUsage(10);
+        this.getProxy().setValidSides(sides);
     }
 
     @MENetworkEventSubscribe
@@ -76,31 +82,39 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
 
     @Override
     public void onChangeInventory(IItemHandler inv, int slot, InvOperation invOperation, ItemStack removed, ItemStack added) {
-        var empty = false;
-        if (patterns.isEmpty()) {
-            empty = true;
-        } else patterns.clear();
-        if (!added.isEmpty()) {
-            var r = CarvingUtils.getChiselRegistry();
-            if (r == null) throw new RuntimeException("Chisel Registry is Null!");
-            var input = AEItemStack.fromItemStack(added);
-            if (input == null) throw new RuntimeException("added is empty?");
-            for (var itemStack : r.getItemsForChiseling(added)) {
-                if (!input.equals(itemStack)) {
-                    patterns.add(new ChiselPatternDetails(input, itemStack));
+        switch (invOperation) {
+            case EXTRACT -> {
+                if (!removed.isEmpty()) {
+                    patterns.clear();
+                    this.getProxy().getNode().getGrid().postEvent(new MENetworkCraftingPatternChange(this, this.getProxy().getNode()));
                 }
             }
-            if (patterns.isEmpty()) {
-                this.inv.setStackInSlot(0, ItemStack.EMPTY);
-                if (empty) {
-                    return;
-                }
-            }
-        }
-        try {
-            this.getProxy().getGrid().postEvent(new MENetworkCraftingPatternChange(this, this.getProxy().getNode()));
-        } catch (GridAccessException ignored) {
+            case INSERT -> {
+                var r = CarvingUtils.getChiselRegistry();
+                if (r != null) {
+                    var input = AEItemStack.fromItemStack(added);
+                    if (ChiselPatternDetails.addChiselPatterns(input,r.getItemsForChiseling(added),patterns)) {
+                        try {
+                            this.getProxy().getNode().getGrid().postEvent(new MENetworkCraftingPatternChange(this, this.getProxy().getNode()));
+                        } catch (NullPointerException ignored) {
 
+                        }
+                    } else {
+                        this.inv.setStackInSlot(0, ItemStack.EMPTY);
+                    }
+                }
+            }
+            case SET -> {
+                patterns.clear();
+                var r = CarvingUtils.getChiselRegistry();
+                if (r != null) {
+                    var input = AEItemStack.fromItemStack(added);
+                    if (!ChiselPatternDetails.addChiselPatterns(input,r.getItemsForChiseling(added),patterns)) {
+                        this.inv.setStackInSlot(0, ItemStack.EMPTY);
+                    }
+                }
+                this.getProxy().getNode().getGrid().postEvent(new MENetworkCraftingPatternChange(this, this.getProxy().getNode()));
+            }
         }
     }
 
@@ -224,30 +238,32 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
     }
 
     @Override
-    public void update() {
-        if (cache.isEmpty()) return;
-        try {
-            var grid = this.getProxy().getGrid();
-            IEnergyGrid energyGrid = grid.getCache(IEnergyGrid.class);
-            IStorageGrid storageGrid = grid.getCache(IStorageGrid.class);
-            var storage = storageGrid.getInventory(AEApi.instance().storage().getStorageChannel(IItemStorageChannel.class));
-            ItemList o = null;
-            for (var stack : cache) {
-                if (stack == null || stack.getStackSize() == 0) return;
-                var newItem = Platform.poweredInsert(energyGrid, storage, stack, source, Actionable.MODULATE);
-                if (newItem != null && newItem.getStackSize() != 0) {
-                    if (o == null) o = new ItemList();
-                    o.addStorage(newItem);
-                }
-            }
-            cache.resetStatus();
-            if (o != null) {
-                for (var stack : o) {
-                    cache.addStorage(stack);
-                }
-            }
-        } catch (GridAccessException ignored) {
+    public @NotNull TickingRequest getTickingRequest(@NotNull IGridNode node) {
+        return this.duality.getTickingRequest(node);
+    }
 
+    @Override
+    public @NotNull TickRateModulation tickingRequest(@NotNull IGridNode node, int i) {
+        if (cache.isEmpty()) return TickRateModulation.SLOWER;
+        var grid = node.getGrid();
+        IEnergyGrid energyGrid = grid.getCache(IEnergyGrid.class);
+        IStorageGrid storageGrid = grid.getCache(IStorageGrid.class);
+        var storage = storageGrid.getInventory(AEApi.instance().storage().getStorageChannel(IItemStorageChannel.class));
+        ItemList o = null;
+        for (var stack : cache) {
+            if (stack == null || stack.getStackSize() == 0) continue;
+            var newItem = Platform.poweredInsert(energyGrid, storage, stack, source, Actionable.MODULATE);
+            if (newItem != null && newItem.getStackSize() != 0) {
+                if (o == null) o = new ItemList();
+                o.addStorage(newItem);
+            }
         }
+        cache.resetStatus();
+        if (o != null) {
+            for (var stack : o) {
+                cache.addStorage(stack);
+            }
+        }
+        return TickRateModulation.URGENT;
     }
 }

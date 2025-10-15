@@ -8,11 +8,25 @@ import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Collection;
 
 @Desugar
 public record ChiselPatternDetails(IAEItemStack[] inputs, IAEItemStack[] outputs) implements ICraftingPatternDetails {
 
-    public ChiselPatternDetails(@NotNull IAEItemStack input, @NotNull ItemStack output) {
+    public static boolean addChiselPatterns(@Nullable IAEItemStack input, @Nullable Collection<ItemStack> outputs, @NotNull Collection<ChiselPatternDetails> patterns) {
+        if (input == null) return false;
+        if (outputs == null || outputs.isEmpty()) return false;
+        for (var itemStack : outputs) {
+            if (!input.equals(itemStack)) {
+                patterns.add(new ChiselPatternDetails(input, itemStack));
+            }
+        }
+        return true;
+    }
+
+    private ChiselPatternDetails(@NotNull IAEItemStack input, @NotNull ItemStack output) {
         this(new IAEItemStack[]{input}, new AEItemStack[]{AEItemStack.fromItemStack(output)});
     }
 
