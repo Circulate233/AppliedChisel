@@ -5,7 +5,6 @@ import com.circulation.ae_chisel.client.ContainerAEChisel;
 import com.circulation.ae_chisel.common.BlockAEChisel;
 import com.circulation.ae_chisel.common.TileEntityAEChisel;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemBlock;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.network.IGuiHandler;
@@ -22,7 +21,7 @@ public class CommonProxy implements IGuiHandler {
         NetworkRegistry.INSTANCE.registerGuiHandler(AppliedChisel.instance, this);
         ForgeRegistries.BLOCKS.register(BlockAEChisel.getInstance());
         var rl = Objects.requireNonNull(BlockAEChisel.getInstance().getRegistryName());
-        ForgeRegistries.ITEMS.register(new ItemBlock(BlockAEChisel.getInstance()).setRegistryName(rl));
+        ForgeRegistries.ITEMS.register(BlockAEChisel.getITEM_BLOCK());
         GameRegistry.registerTileEntity(TileEntityAEChisel.class, rl);
     }
 

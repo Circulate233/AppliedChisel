@@ -2,10 +2,13 @@ package com.circulation.ae_chisel.common;
 
 import appeng.block.AEBaseTileBlock;
 import com.circulation.ae_chisel.AppliedChisel;
+import lombok.Getter;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
@@ -13,6 +16,8 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
+
+import java.util.Objects;
 
 import static com.circulation.ae_chisel.AppliedChisel.MOD_ID;
 
@@ -27,6 +32,8 @@ public class BlockAEChisel extends AEBaseTileBlock {
     };
 
     private static final BlockAEChisel INSTANCE = new BlockAEChisel();
+    @Getter
+    private static final Item ITEM_BLOCK = new ItemBlock(BlockAEChisel.getInstance()).setRegistryName(Objects.requireNonNull(INSTANCE.getRegistryName()));
 
     @NotNull
     public static BlockAEChisel getInstance(){
@@ -44,10 +51,16 @@ public class BlockAEChisel extends AEBaseTileBlock {
     @Override
     public boolean onBlockActivated(World world, BlockPos pos, IBlockState state, EntityPlayer player, EnumHand hand, EnumFacing facing, float hitX, float hitY, float hitZ) {
         if (world.getTileEntity(pos) instanceof TileEntityAEChisel){
-            player.openGui(AppliedChisel.instance,0,world,pos.getX(),pos.getY(),pos.getZ());
+            if (!super.onBlockActivated(world, pos, state, player, hand, facing, hitX, hitY, hitZ)) {
+                player.openGui(AppliedChisel.instance, 0, world, pos.getX(), pos.getY(), pos.getZ());
+            }
             return true;
         }
         return super.onBlockActivated(world, pos, state, player, hand, facing, hitX, hitY, hitZ);
     }
 
+    @Override
+    public void breakBlock(World w, BlockPos pos, IBlockState state) {
+        w.removeTileEntity(pos);
+    }
 }

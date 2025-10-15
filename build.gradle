@@ -204,7 +204,7 @@ dependencies {
     compileOnly("org.projectlombok:lombok:1.18.24")
     annotationProcessor("org.projectlombok:lombok:1.18.24")
 
-    compileOnly(rfg.deobf("curse.maven:had-enough-items-557549:7057606"))
+    implementation(rfg.deobf("curse.maven:had-enough-items-557549:7057606"))
     runtimeOnly(rfg.deobf("curse.maven:ctm-267602:2915363"))
     implementation(rfg.deobf("curse.maven:ae2-extended-life-570458:6302098"))
     implementation(rfg.deobf("curse.maven:chisel-235279:2915375"))
