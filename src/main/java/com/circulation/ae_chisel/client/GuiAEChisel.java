@@ -51,7 +51,7 @@ public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
     @Override
     public void initGui() {
         super.initGui();
-        this.parallel = new MEGuiTooltipTextField(64, 12) {
+        this.parallel = new MEGuiTooltipTextField(64, 12,I18n.format("text.ae_chisel.gui.parallel")) {
             @Override
             public boolean textboxKeyTyped(char keyChar, int keyID) {
                 if (!this.isFocused()) {
