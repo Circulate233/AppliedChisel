@@ -1,15 +1,23 @@
 package com.circulation.ae_chisel;
 
+import appeng.api.AEApi;
+import com.circulation.ae_chisel.common.BlockAEChisel;
 import com.circulation.ae_chisel.proxy.CommonProxy;
 import com.circulation.ae_chisel.utils.SyncParallel;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.SidedProxy;
+import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.network.NetworkRegistry;
 import net.minecraftforge.fml.common.network.simpleimpl.SimpleNetworkWrapper;
+import net.minecraftforge.fml.common.registry.GameRegistry;
 import net.minecraftforge.fml.relauncher.Side;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import team.chisel.common.init.ChiselBlocks;
+import team.chisel.common.init.ChiselItems;
 
 @Mod(modid = AppliedChisel.MOD_ID, name = Tags.MOD_NAME, version = Tags.VERSION,
         dependencies = "required-after:chisel;" +
@@ -34,6 +42,26 @@ public class AppliedChisel {
         NET_CHANNEL.registerMessage(SyncParallel.class, SyncParallel.class, 0, Side.SERVER);
         NET_CHANNEL.registerMessage(SyncParallel.class, SyncParallel.class, 1, Side.CLIENT);
         proxy.preInit();
+    }
+
+    @Mod.EventHandler
+    public void postInit(FMLPostInitializationEvent event) {
+        var materials = AEApi.instance().definitions().materials();
+        var blocks = AEApi.instance().definitions().blocks();
+        GameRegistry.addShapedRecipe(
+                new ResourceLocation(MOD_ID, MOD_ID),
+                null,
+                new ItemStack(BlockAEChisel.getITEM_BLOCK()),
+                "ABA",
+                "CDC",
+                "EFE",
+                'A', materials.cell128SpatialPart().maybeStack(1).orElse(ItemStack.EMPTY),
+                'B', new ItemStack(ChiselItems.chisel_hitech),
+                'C', GameRegistry.makeItemStack("appliedenergistics2:interface", 0, 1, ""),
+                'D', blocks.molecularAssembler().maybeStack(1).orElse(ItemStack.EMPTY),
+                'E', materials.cardPatternExpansion().maybeStack(1).orElse(ItemStack.EMPTY),
+                'F', new ItemStack(ChiselBlocks.auto_chisel)
+        );
     }
 
 }
