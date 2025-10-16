@@ -53,7 +53,7 @@ public class BlockAEChisel extends AEBaseTileBlock {
         if (world.getTileEntity(pos) instanceof TileEntityAEChisel te) {
             if (!super.onBlockActivated(world, pos, state, player, hand, facing, hitX, hitY, hitZ)) {
                 if (player instanceof EntityPlayerMP p) {
-                    if (te.parallel != 1) {
+                    if (te.getParallel() > 1) {
                         NET_CHANNEL.sendTo(new SyncParallel(te), p);
                     }
                     p.openGui(AppliedChisel.instance, 0, world, pos.getX(), pos.getY(), pos.getZ());

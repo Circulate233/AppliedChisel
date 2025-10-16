@@ -21,7 +21,7 @@ public class SyncParallel implements IMessage, IMessageHandler<SyncParallel,IMes
 
     public SyncParallel(TileEntityAEChisel te){
         pos = te.getPos();
-        parallel = te.parallel;
+        parallel = te.getParallel();
     }
 
     @Override
@@ -42,7 +42,7 @@ public class SyncParallel implements IMessage, IMessageHandler<SyncParallel,IMes
             case SERVER -> {
                 var world = ctx.getServerHandler().player.world;
                 if (world.getTileEntity(message.pos) instanceof TileEntityAEChisel te){
-                    if (te.parallel != message.parallel)
+                    if (te.getParallel() != message.parallel)
                         te.setParallel(message.parallel);
                 }
             }
@@ -55,7 +55,7 @@ public class SyncParallel implements IMessage, IMessageHandler<SyncParallel,IMes
     public void onClient(SyncParallel message, MessageContext ctx){
         var world = Minecraft.getMinecraft().player.world;
         if (world.getTileEntity(message.pos) instanceof TileEntityAEChisel te){
-            te.parallel = message.parallel;
+            te.setParallel(message.parallel);
         }
     }
 }

@@ -34,6 +34,7 @@ import appeng.util.item.ItemList;
 import com.circulation.ae_chisel.utils.ChiselPatternDetails;
 import com.google.common.collect.ImmutableSet;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import lombok.Getter;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -55,7 +56,8 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
     protected final MachineSource source = new MachineSource(this);
     protected final List<ChiselPatternDetails> patterns = new ObjectArrayList<>();
     protected final ItemList cache = new ItemList();
-    public int parallel = 1;
+    @Getter
+    private int parallel = 1;
 
     private static final EnumSet<EnumFacing> sides = EnumSet.complementOf(EnumSet.of(EnumFacing.UP));
 
@@ -120,8 +122,9 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
     }
 
     public void setParallel(int parallel) {
+        if (parallel < 1) parallel = 1;
         this.parallel = parallel;
-        if (!inv.getStackInSlot(0).isEmpty()) {
+        if (!this.world.isRemote && !inv.getStackInSlot(0).isEmpty()) {
             for (var pattern : this.patterns) {
                 pattern.setParallel(this.parallel);
             }

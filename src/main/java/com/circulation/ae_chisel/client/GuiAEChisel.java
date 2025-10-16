@@ -45,7 +45,7 @@ public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
         super(new ContainerAEChisel(inventoryPlayer, te));
         this.ySize = 166;
         this.te = te;
-        this.oldParallel = te.parallel;
+        this.oldParallel = te.getParallel();
     }
 
     @Override
@@ -91,15 +91,15 @@ public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
         this.parallel.setEnableBackgroundDrawing(false);
         this.parallel.setMaxStringLength(10);
         this.parallel.setTextColor(16777215);
-        this.parallel.setText(te.parallel > 0 ? Integer.toString(te.parallel) : "1");
+        this.parallel.setText(te.getParallel() > 0 ? Integer.toString(te.getParallel()) : "1");
         this.parallel.x = this.guiLeft + 55;
         this.parallel.y = this.guiTop + 62;
     }
 
     private void syncParallel(){
-        if (te.parallel != oldParallel) {
+        if (te.getParallel() != oldParallel) {
             AppliedChisel.NET_CHANNEL.sendToServer(new SyncParallel(te));
-            oldParallel = te.parallel;
+            oldParallel = te.getParallel();
         }
     }
 
@@ -146,7 +146,7 @@ public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
                 l = 2147483647;
                 this.parallel.setText("2147483647");
             }
-            te.parallel = (int) l;
+            te.setParallel((int) l);
         }
     }
 
