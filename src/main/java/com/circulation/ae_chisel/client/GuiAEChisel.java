@@ -1,6 +1,7 @@
 package com.circulation.ae_chisel.client;
 
 import appeng.client.gui.AEBaseGui;
+import appeng.client.gui.widgets.MEGuiTooltipTextField;
 import appeng.container.interfaces.IJEIGhostIngredients;
 import appeng.container.slot.SlotFake;
 import appeng.core.localization.GuiText;
@@ -8,7 +9,9 @@ import appeng.core.sync.network.NetworkHandler;
 import appeng.core.sync.packets.PacketInventoryAction;
 import appeng.helpers.InventoryAction;
 import appeng.util.item.AEItemStack;
+import com.circulation.ae_chisel.AppliedChisel;
 import com.circulation.ae_chisel.common.TileEntityAEChisel;
+import com.circulation.ae_chisel.utils.SyncParallel;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMaps;
 import it.unimi.dsi.fastutil.objects.ObjectLists;
 import mezz.jei.api.gui.IGhostIngredientHandler;
@@ -19,6 +22,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraftforge.fml.common.Optional;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 
 import java.awt.Rectangle;
@@ -33,9 +37,117 @@ import java.util.Map;
 )
 public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
 
+    private MEGuiTooltipTextField parallel;
+    private final TileEntityAEChisel te;
+    private int oldParallel;
+
     public GuiAEChisel(InventoryPlayer inventoryPlayer, TileEntityAEChisel te) {
-        super(new ContainerAEChisel(inventoryPlayer,te));
+        super(new ContainerAEChisel(inventoryPlayer, te));
         this.ySize = 166;
+        this.te = te;
+        this.oldParallel = te.parallel;
+    }
+
+    @Override
+    public void initGui() {
+        super.initGui();
+        this.parallel = new MEGuiTooltipTextField(64, 12) {
+            @Override
+            public boolean textboxKeyTyped(char keyChar, int keyID) {
+                if (!this.isFocused()) {
+                    return false;
+                } else {
+                    String oldText = this.getText();
+                    boolean handled = this.field.textboxKeyTyped(keyChar, keyID);
+                    if (!handled && (keyID == 28 || keyID == 156 || keyID == 1)) {
+                        this.setFocused(false);
+                    }
+
+                    if (handled) {
+                        this.onTextChange(oldText);
+                    }
+
+                    if (!StringUtils.isNumeric(this.getText())){
+                        if (this.getText().isEmpty()) {
+                            this.setText("1");
+                            return true;
+                        } else {
+                            this.setText(oldText);
+                            return false;
+                        }
+                    }
+
+                    return handled;
+                }
+            }
+
+            @Override
+            public void setFocused(boolean focus) {
+                final boolean i = this.field.isFocused() && !focus;
+                super.setFocused(focus);
+                if (i) syncParallel();
+            }
+        };
+        this.parallel.setEnableBackgroundDrawing(false);
+        this.parallel.setMaxStringLength(10);
+        this.parallel.setTextColor(16777215);
+        this.parallel.setText(te.parallel > 0 ? Integer.toString(te.parallel) : "1");
+        this.parallel.x = this.guiLeft + 55;
+        this.parallel.y = this.guiTop + 62;
+    }
+
+    private void syncParallel(){
+        if (te.parallel != oldParallel) {
+            AppliedChisel.NET_CHANNEL.sendToServer(new SyncParallel(te));
+            oldParallel = te.parallel;
+        }
+    }
+
+    @Override
+    public void onGuiClosed(){
+        syncParallel();
+        super.onGuiClosed();
+    }
+
+    @Override
+    public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        super.drawScreen(mouseX, mouseY, partialTicks);
+        this.drawTooltip(this.parallel, mouseX, mouseY);
+    }
+
+    @Override
+    protected void mouseClicked(int xPos, int yPos, int button) throws IOException {
+        parallel.mouseClicked(xPos, yPos, button);
+        super.mouseClicked(xPos, yPos, button);
+    }
+
+    @Override
+    protected void keyTyped(char character, int key) throws IOException {
+        if (!this.checkHotbarKeys(key)) {
+            if (character == ' ') {
+                if (this.parallel.getText().isEmpty() && this.parallel.isFocused()) {
+                    return;
+                }
+            }
+
+            if (!this.parallel.textboxKeyTyped(character, key)) {
+                super.keyTyped(character, key);
+                return;
+            }
+            var text = this.parallel.getText();
+            long l;
+            try {
+                l = Long.parseLong(text);
+            } catch (NumberFormatException e) {
+                l = 1;
+                this.parallel.setText("1");
+            }
+            if (l < 1 || l > Integer.MAX_VALUE) {
+                l = 2147483647;
+                this.parallel.setText("2147483647");
+            }
+            te.parallel = (int) l;
+        }
     }
 
     @Override
@@ -48,9 +160,10 @@ public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
     public void drawBG(int offsetX, int offsetY, int mouseX, int mouseY) {
         this.bindTexture("guis/chest.png");
         this.drawTexturedModalRect(offsetX, offsetY, 0, 0, this.xSize, this.ySize);
+        this.parallel.drawTextBox();
     }
 
-    private Map<?,?> slotMap = Object2ObjectMaps.emptyMap();
+    private Map<?, ?> slotMap = Object2ObjectMaps.emptyMap();
 
     @Override
     @Optional.Method(modid = "jei")
@@ -73,7 +186,7 @@ public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
 
                         }
                     };
-                    if (slotMap.isEmpty())slotMap = Object2ObjectMaps.singleton(target, slot);
+                    if (slotMap.isEmpty()) slotMap = Object2ObjectMaps.singleton(target, slot);
                     return ObjectLists.singleton(target);
                 }
             }

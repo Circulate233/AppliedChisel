@@ -55,6 +55,7 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
     protected final MachineSource source = new MachineSource(this);
     protected final List<ChiselPatternDetails> patterns = new ObjectArrayList<>();
     protected final ItemList cache = new ItemList();
+    public int parallel = 1;
 
     private static final EnumSet<EnumFacing> sides = EnumSet.complementOf(EnumSet.of(EnumFacing.UP));
 
@@ -93,7 +94,7 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
                 var r = CarvingUtils.getChiselRegistry();
                 if (r != null) {
                     var input = AEItemStack.fromItemStack(added);
-                    if (ChiselPatternDetails.addChiselPatterns(input,r.getItemsForChiseling(added),patterns)) {
+                    if (ChiselPatternDetails.addChiselPatterns(input, r.getItemsForChiseling(added), patterns, this.parallel)) {
                         try {
                             this.getProxy().getNode().getGrid().postEvent(new MENetworkCraftingPatternChange(this, this.getProxy().getNode()));
                         } catch (NullPointerException ignored) {
@@ -109,7 +110,7 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
                 var r = CarvingUtils.getChiselRegistry();
                 if (r != null) {
                     var input = AEItemStack.fromItemStack(added);
-                    if (!ChiselPatternDetails.addChiselPatterns(input,r.getItemsForChiseling(added),patterns)) {
+                    if (!ChiselPatternDetails.addChiselPatterns(input, r.getItemsForChiseling(added), patterns, this.parallel)) {
                         this.inv.setStackInSlot(0, ItemStack.EMPTY);
                     }
                 }
@@ -118,11 +119,22 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
         }
     }
 
+    public void setParallel(int parallel) {
+        this.parallel = parallel;
+        if (!inv.getStackInSlot(0).isEmpty()) {
+            for (var pattern : this.patterns) {
+                pattern.setParallel(this.parallel);
+            }
+            this.getProxy().getNode().getGrid().postEvent(new MENetworkCraftingPatternChange(this, this.getProxy().getNode()));
+        }
+    }
+
     @Override
     @NotNull
     public NBTTagCompound writeToNBT(NBTTagCompound data) {
+        data.setInteger("parallel", this.parallel);
         NBTTagList list = new NBTTagList();
-        for (var stack : cache) {
+        for (var stack : this.cache) {
             NBTTagCompound nbt = new NBTTagCompound();
             stack.writeToNBT(nbt);
             list.appendTag(nbt);
@@ -133,10 +145,11 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
 
     @Override
     public void readFromNBT(NBTTagCompound data) {
-        cache.resetStatus();
+        this.parallel = data.getInteger("parallel");
+        this.cache.resetStatus();
         var list = data.getTagList("cacheItems", 10);
         for (var nbtBase : list) {
-            cache.addStorage(AEItemStack.fromNBT((NBTTagCompound) nbtBase));
+            this.cache.addStorage(AEItemStack.fromNBT((NBTTagCompound) nbtBase));
         }
         super.readFromNBT(data);
     }

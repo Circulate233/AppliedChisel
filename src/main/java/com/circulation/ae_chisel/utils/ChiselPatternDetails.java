@@ -15,19 +15,25 @@ import java.util.Collection;
 @Desugar
 public record ChiselPatternDetails(IAEItemStack[] inputs, IAEItemStack[] outputs) implements ICraftingPatternDetails {
 
-    public static boolean addChiselPatterns(@Nullable IAEItemStack input, @Nullable Collection<ItemStack> outputs, @NotNull Collection<ChiselPatternDetails> patterns) {
+    public static boolean addChiselPatterns(@Nullable IAEItemStack input, @Nullable Collection<ItemStack> outputs, @NotNull Collection<ChiselPatternDetails> patterns,int parallel) {
         if (input == null) return false;
         if (outputs == null || outputs.isEmpty()) return false;
         for (var itemStack : outputs) {
-            if (!input.equals(itemStack)) {
-                patterns.add(new ChiselPatternDetails(input, itemStack));
+            var out = AEItemStack.fromItemStack(itemStack);
+            if (out != null && !input.equals(itemStack)) {
+                patterns.add(new ChiselPatternDetails(input.setStackSize(parallel), out.setStackSize(parallel)));
             }
         }
         return true;
     }
 
-    private ChiselPatternDetails(@NotNull IAEItemStack input, @NotNull ItemStack output) {
-        this(new IAEItemStack[]{input}, new AEItemStack[]{AEItemStack.fromItemStack(output)});
+    public void setParallel(int parallel){
+        inputs[0].setStackSize(parallel);
+        outputs[0].setStackSize(parallel);
+    }
+
+    private ChiselPatternDetails(@NotNull IAEItemStack input, @NotNull IAEItemStack output) {
+        this(new IAEItemStack[]{input}, new IAEItemStack[]{output});
     }
 
     @Override
