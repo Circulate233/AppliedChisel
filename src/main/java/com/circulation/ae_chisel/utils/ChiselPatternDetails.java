@@ -21,7 +21,7 @@ public record ChiselPatternDetails(IAEItemStack[] inputs, IAEItemStack[] outputs
         for (var itemStack : outputs) {
             var out = AEItemStack.fromItemStack(itemStack);
             if (out != null && !input.equals(itemStack)) {
-                patterns.add(new ChiselPatternDetails(input.setStackSize(parallel), out.setStackSize(parallel)));
+                patterns.add(new ChiselPatternDetails(input.copy().setStackSize(parallel), out.setStackSize(parallel)));
             }
         }
         return true;
