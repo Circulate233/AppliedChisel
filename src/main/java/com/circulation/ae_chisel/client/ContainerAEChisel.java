@@ -13,7 +13,7 @@ public class ContainerAEChisel extends AEBaseContainer {
     public ContainerAEChisel(InventoryPlayer ip, TileEntityAEChisel myTile) {
         super(ip, myTile, null);
         this.tile = myTile;
-        this.addSlotToContainer(slotFake = new SlotFake(myTile.getInternalInventory(), 0, 80, 37){
+        this.addSlotToContainer(slotFake = new SlotFake(myTile.getInternalInventory(), 0, 80, 37) {
             public void putStack(ItemStack is) {
                 if (!is.isEmpty()) {
                     is = is.copy();

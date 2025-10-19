@@ -25,6 +25,10 @@ import static com.circulation.ae_chisel.AppliedChisel.NET_CHANNEL;
 //TODO:错误的破坏粒子效果
 public class BlockAEChisel extends AEBaseTileBlock {
 
+    @Getter
+    private static final ResourceLocation rl = new ResourceLocation(MOD_ID, "ae_chisel");
+    @Getter
+    private static final BlockAEChisel INSTANCE = new BlockAEChisel();
     private static final CreativeTabs creativeTab = new CreativeTabs(MOD_ID) {
         @Override
         @NotNull
@@ -32,11 +36,6 @@ public class BlockAEChisel extends AEBaseTileBlock {
             return new ItemStack(INSTANCE);
         }
     };
-
-    @Getter
-    private static final ResourceLocation rl = new ResourceLocation(MOD_ID, "ae_chisel");
-    @Getter
-    private static final BlockAEChisel INSTANCE = new BlockAEChisel();
     @Getter
     private static final Item ITEM_BLOCK = new ItemBlock(INSTANCE).setTranslationKey(MOD_ID + '.' + "ae_chisel").setCreativeTab(creativeTab).setRegistryName(rl);
 

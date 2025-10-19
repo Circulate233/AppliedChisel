@@ -51,15 +51,15 @@ import java.util.List;
 
 public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHost, IGridTickable {
 
+    private static final EnumSet<EnumFacing> sides = EnumSet.complementOf(EnumSet.of(EnumFacing.UP));
     protected final DualityInterface duality = new DualityInterface(this.getProxy(), this);
     protected final AppEngInternalInventory inv = new AppEngInternalInventory(this, 1, 1);
     protected final MachineSource source = new MachineSource(this);
     protected final List<ChiselPatternDetails> patterns = new ObjectArrayList<>();
     protected final ItemList cache = new ItemList();
+    private final EnumSet<EnumFacing> targets = EnumSet.allOf(EnumFacing.class);
     @Getter
     private int parallel = 1;
-
-    private static final EnumSet<EnumFacing> sides = EnumSet.complementOf(EnumSet.of(EnumFacing.UP));
 
     public void onReady() {
         super.onReady();
@@ -128,13 +128,18 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
             for (var pattern : this.patterns) {
                 pattern.setParallel(this.parallel);
             }
-            this.getProxy().getNode().getGrid().postEvent(new MENetworkCraftingPatternChange(this, this.getProxy().getNode()));
+            try {
+                this.getProxy().getNode().getGrid().postEvent(new MENetworkCraftingPatternChange(this, this.getProxy().getNode()));
+            } catch (NullPointerException ignored) {
+
+            }
         }
     }
 
     @Override
     @NotNull
     public NBTTagCompound writeToNBT(NBTTagCompound data) {
+        super.writeToNBT(data);
         data.setInteger("parallel", this.parallel);
         NBTTagList list = new NBTTagList();
         for (var stack : this.cache) {
@@ -143,26 +148,24 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
             list.appendTag(nbt);
         }
         data.setTag("cacheItems", list);
-        return super.writeToNBT(data);
+        return data;
     }
 
     @Override
     public void readFromNBT(NBTTagCompound data) {
-        this.parallel = data.getInteger("parallel");
+        super.readFromNBT(data);
+        this.setParallel(Math.max(1, data.getInteger("parallel")));
         this.cache.resetStatus();
         var list = data.getTagList("cacheItems", 10);
         for (var nbtBase : list) {
             this.cache.addStorage(AEItemStack.fromNBT((NBTTagCompound) nbtBase));
         }
-        super.readFromNBT(data);
     }
 
     @Override
     public DualityInterface getInterfaceDuality() {
         return duality;
     }
-
-    private final EnumSet<EnumFacing> targets = EnumSet.allOf(EnumFacing.class);
 
     @Override
     public EnumSet<EnumFacing> getTargets() {
@@ -186,8 +189,10 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
 
     @Override
     public void provideCrafting(ICraftingProviderHelper providerHelper) {
-        for (var pattern : patterns) {
-            providerHelper.addCraftingOption(this, pattern);
+        if (this.getProxy().isActive()) {
+            for (var pattern : patterns) {
+                providerHelper.addCraftingOption(this, pattern);
+            }
         }
     }
 

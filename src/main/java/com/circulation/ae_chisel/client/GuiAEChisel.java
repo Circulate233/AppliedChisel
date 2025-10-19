@@ -37,9 +37,10 @@ import java.util.Map;
 )
 public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
 
-    private MEGuiTooltipTextField parallel;
     private final TileEntityAEChisel te;
+    private MEGuiTooltipTextField parallel;
     private int oldParallel;
+    private Map<?, ?> slotMap = Object2ObjectMaps.emptyMap();
 
     public GuiAEChisel(InventoryPlayer inventoryPlayer, TileEntityAEChisel te) {
         super(new ContainerAEChisel(inventoryPlayer, te));
@@ -51,7 +52,7 @@ public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
     @Override
     public void initGui() {
         super.initGui();
-        this.parallel = new MEGuiTooltipTextField(64, 12,I18n.format("text.ae_chisel.gui.parallel")) {
+        this.parallel = new MEGuiTooltipTextField(64, 12, I18n.format("text.ae_chisel.gui.parallel")) {
             @Override
             public boolean textboxKeyTyped(char keyChar, int keyID) {
                 if (!this.isFocused()) {
@@ -67,7 +68,7 @@ public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
                         this.onTextChange(oldText);
                     }
 
-                    if (!StringUtils.isNumeric(this.getText())){
+                    if (!StringUtils.isNumeric(this.getText())) {
                         if (this.getText().isEmpty()) {
                             this.setText("1");
                             return true;
@@ -96,7 +97,7 @@ public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
         this.parallel.y = this.guiTop + 62;
     }
 
-    private void syncParallel(){
+    private void syncParallel() {
         if (te.getParallel() != oldParallel) {
             AppliedChisel.NET_CHANNEL.sendToServer(new SyncParallel(te));
             oldParallel = te.getParallel();
@@ -104,7 +105,7 @@ public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
     }
 
     @Override
-    public void onGuiClosed(){
+    public void onGuiClosed() {
         syncParallel();
         super.onGuiClosed();
     }
@@ -162,8 +163,6 @@ public class GuiAEChisel extends AEBaseGui implements IJEIGhostIngredients {
         this.drawTexturedModalRect(offsetX, offsetY, 0, 0, this.xSize, this.ySize);
         this.parallel.drawTextBox();
     }
-
-    private Map<?, ?> slotMap = Object2ObjectMaps.emptyMap();
 
     @Override
     @Optional.Method(modid = "jei")

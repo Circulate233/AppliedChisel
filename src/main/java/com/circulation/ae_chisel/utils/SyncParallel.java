@@ -10,16 +10,16 @@ import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
-public class SyncParallel implements IMessage, IMessageHandler<SyncParallel,IMessage> {
+public class SyncParallel implements IMessage, IMessageHandler<SyncParallel, IMessage> {
 
     private BlockPos pos;
     private int parallel;
 
-    public SyncParallel(){
+    public SyncParallel() {
 
     }
 
-    public SyncParallel(TileEntityAEChisel te){
+    public SyncParallel(TileEntityAEChisel te) {
         pos = te.getPos();
         parallel = te.getParallel();
     }
@@ -38,23 +38,23 @@ public class SyncParallel implements IMessage, IMessageHandler<SyncParallel,IMes
 
     @Override
     public IMessage onMessage(SyncParallel message, MessageContext ctx) {
-        switch (ctx.side){
+        switch (ctx.side) {
             case SERVER -> {
                 var world = ctx.getServerHandler().player.world;
-                if (world.getTileEntity(message.pos) instanceof TileEntityAEChisel te){
+                if (world.getTileEntity(message.pos) instanceof TileEntityAEChisel te) {
                     if (te.getParallel() != message.parallel)
                         te.setParallel(message.parallel);
                 }
             }
-            case CLIENT -> onClient(message,ctx);
+            case CLIENT -> onClient(message, ctx);
         }
         return null;
     }
 
     @SideOnly(Side.CLIENT)
-    public void onClient(SyncParallel message, MessageContext ctx){
+    public void onClient(SyncParallel message, MessageContext ctx) {
         var world = Minecraft.getMinecraft().player.world;
-        if (world.getTileEntity(message.pos) instanceof TileEntityAEChisel te){
+        if (world.getTileEntity(message.pos) instanceof TileEntityAEChisel te) {
             te.setParallel(message.parallel);
         }
     }
