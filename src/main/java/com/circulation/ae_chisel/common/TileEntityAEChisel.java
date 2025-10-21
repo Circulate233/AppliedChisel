@@ -97,11 +97,9 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
                 if (r != null) {
                     var input = AEItemStack.fromItemStack(added);
                     if (ChiselPatternDetails.addChiselPatterns(input, r.getItemsForChiseling(added), patterns, this.parallel)) {
-                        try {
-                            this.getProxy().getNode().getGrid().postEvent(new MENetworkCraftingPatternChange(this, this.getProxy().getNode()));
-                        } catch (NullPointerException ignored) {
-
-                        }
+                        var n = this.getProxy().getNode();
+                        if (n == null) return;
+                        n.getGrid().postEvent(new MENetworkCraftingPatternChange(this,n));
                     } else {
                         this.inv.setStackInSlot(0, ItemStack.EMPTY);
                     }
@@ -128,11 +126,9 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
             for (var pattern : this.patterns) {
                 pattern.setParallel(this.parallel);
             }
-            try {
-                this.getProxy().getNode().getGrid().postEvent(new MENetworkCraftingPatternChange(this, this.getProxy().getNode()));
-            } catch (NullPointerException ignored) {
-
-            }
+            var n = this.getProxy().getNode();
+            if (n == null) return;
+            n.getGrid().postEvent(new MENetworkCraftingPatternChange(this,n));
         }
     }
 
@@ -154,7 +150,10 @@ public class TileEntityAEChisel extends AENetworkInvTile implements IInterfaceHo
     @Override
     public void readFromNBT(NBTTagCompound data) {
         super.readFromNBT(data);
-        this.setParallel(Math.max(1, data.getInteger("parallel")));
+        this.parallel = Math.max(1, data.getInteger("parallel"));
+        for (var pattern : this.patterns) {
+            pattern.setParallel(this.parallel);
+        }
         this.cache.resetStatus();
         var list = data.getTagList("cacheItems", 10);
         for (var nbtBase : list) {
