@@ -1,2 +1,3 @@
 tile.ae_chisel.ae_chisel.name=智能雕凿装置
 text.ae_chisel.gui.parallel=并行数量
+itemGroup.ae_chisel=AE Chisel
