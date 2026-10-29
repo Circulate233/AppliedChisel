@@ -1,25 +1,16 @@
-name: Build mod
+name: Build mod jar
 
-on: [ push, pull_request, workflow_dispatch ]
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+
+permissions:
+  contents: write
 
 jobs:
   build:
-    name: Build mod
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v2
-    - name: Set up JDK 17
-      uses: actions/setup-java@v2
-      with:
-        distribution: 'adopt'
-        java-version: '17'
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-    - name: Build with Gradle
-      run: ./gradlew -Pnet.minecraftforge.gradle.disableUpdateChecker=true build
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: Random Complement
-        path: build/libs
+    uses: FormlessDragon/.github/.github/workflows/build-mdg.yml@main
+    secrets: inherit
+    permissions:
+      contents: write

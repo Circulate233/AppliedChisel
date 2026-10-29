@@ -1,8 +1,5 @@
 package com.circulation.ae_chisel.proxy;
 
-import appeng.core.features.ActivityState;
-import appeng.core.features.BlockStackSrc;
-import appeng.tile.AEBaseTile;
 import com.circulation.ae_chisel.AppliedChisel;
 import com.circulation.ae_chisel.client.ContainerAEChisel;
 import com.circulation.ae_chisel.common.BlockAEChisel;
@@ -26,7 +23,6 @@ public class CommonProxy implements IGuiHandler {
         MinecraftForge.EVENT_BUS.register(this);
         NetworkRegistry.INSTANCE.registerGuiHandler(AppliedChisel.instance, this);
         GameRegistry.registerTileEntity(TileEntityAEChisel.class, BlockAEChisel.getRl());
-        AEBaseTile.registerTileItem(TileEntityAEChisel.class, new BlockStackSrc(BlockAEChisel.getINSTANCE(), 0, ActivityState.Enabled));
     }
 
     @SubscribeEvent
@@ -42,7 +38,7 @@ public class CommonProxy implements IGuiHandler {
     @Override
     public @Nullable Object getServerGuiElement(int ID, EntityPlayer player, World world, int x, int y, int z) {
         var t = world.getTileEntity(new BlockPos(x, y, z));
-        if (t instanceof TileEntityAEChisel a) {
+        if (ID == 0 && t instanceof TileEntityAEChisel a) {
             return new ContainerAEChisel(player.inventory, a);
         }
         return null;

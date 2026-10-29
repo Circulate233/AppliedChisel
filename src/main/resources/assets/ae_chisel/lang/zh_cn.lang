@@ -1,0 +1,4 @@
+tile.ae_chisel.ae_chisel.name=智能雕凿装置
+itemGroup.ae_chisel=应用凿子
+text.ae_chisel.gui.parallel=并行数量
+text.ae_chisel.gui.markers=每张样板扩展卡解锁一个雕凿标记槽，最多四个

@@ -1,0 +1,4 @@
+tile.ae_chisel.ae_chisel.name=Intelligent Chisel Device
+itemGroup.ae_chisel=Applied Chisel
+text.ae_chisel.gui.parallel=parallel quantity
+text.ae_chisel.gui.markers=Each Pattern Expansion Card unlocks one chisel marker slot, up to four

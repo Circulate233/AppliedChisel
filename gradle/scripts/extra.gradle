@@ -1,5 +1,233 @@
-// You may write any gradle buildscript component in this file
-// This file is automatically applied after build.gradle + dependencies.gradle is ran
+// You may write any Gradle buildscript component in this file.
+// This file is automatically applied after build.gradle + dependencies.gradle.
 
-// If you wish to use the default helper methods, uncomment the line below
-// apply from: 'gradle/scripts/helpers.gradle'
+sourceSets.test {
+    compileClasspath += sourceSets.main.compileClasspath
+    runtimeClasspath += sourceSets.main.runtimeClasspath
+}
+
+def minecraftVersion = '1.12.2'
+def cleanroomVersion = '0.6.13-alpha'
+
+// The runtime-test workflow intentionally keeps its original staging and
+// installation flow. These tasks provide the same contract for ModDevGradle.
+apply plugin: 'com.diffplug.spotless'
+
+def cleanroomInstaller = configurations.maybeCreate('cleanroomInstaller')
+cleanroomInstaller.canBeConsumed = false
+cleanroomInstaller.canBeResolved = true
+dependencies.add(cleanroomInstaller.name, "com.cleanroommc:cleanroom:${cleanroomVersion}:installer") {
+    transitive = false
+}
+
+def productionJarTask = tasks.named(propertyBool('enable_shadow') ? 'reobfShadowJar' : 'reobfJar')
+def runtimeTestProductionMods = configurations.maybeCreate('runtimeTestProductionMods')
+runtimeTestProductionMods.canBeConsumed = false
+runtimeTestProductionMods.canBeResolved = true
+runtimeTestProductionMods.extendsFrom(
+    configurations.getByName('modImplementation'),
+    configurations.getByName('modRuntimeOnly'),
+    configurations.getByName('modApi')
+)
+def mappingsAttribute = Attribute.of(
+    'com.gtnewhorizons.retrofuturagradle.obfuscation',
+    String
+)
+runtimeTestProductionMods.attributes {
+    attribute(mappingsAttribute, 'srg')
+    attribute(
+            Usage.USAGE_ATTRIBUTE,
+        objects.named(Usage, 'java-runtime')
+    )
+}
+def runtimeTestModsDir = providers.gradleProperty('runtimeTestModsDir')
+    .map { file(it) }
+    .orElse(layout.buildDirectory.dir('runtime-test/instance/mods'))
+def runtimeTestMinecraftDir = providers.gradleProperty('runtimeTestMinecraftDir')
+    .map { file(it) }
+    .orElse(layout.buildDirectory.dir('runtime-test/minecraft'))
+def runtimeTestSupportDir = layout.buildDirectory.dir('runtime-test/support')
+def runtimeTestClientModsDir = layout.buildDirectory.dir('runtime-test/client-mods')
+def runtimeMcpRemapMarker = layout.buildDirectory.file(
+    'runtime-test/runtime-mcp-remap.marker'
+)
+
+def runtimeMcpRemapTask = tasks.register('runtimeTestRemapMcp') {
+    inputs.files(runtimeTestProductionMods)
+    inputs.property('runtimeRemapSchema', 'moddevgradle-mcp-runtime-classpath-v1')
+    outputs.file(runtimeMcpRemapMarker)
+    doLast {
+        def files = runtimeTestProductionMods.files.findAll {
+            it.name.endsWith('.jar') && !it.name.endsWith('-sources.jar')
+        }
+        runtimeMcpRemapMarker.get().asFile.with {
+            parentFile.mkdirs()
+            text = files.collect { it.name }.sort().join('\n') + '\n'
+        }
+        logger.lifecycle(
+            "[RuntimeTest] ModDevGradle supplied ${files.size()} runtime mod variant(s)"
+        )
+    }
+}
+
+tasks.register('stageRuntimeTestMods', Sync) {
+    dependsOn productionJarTask
+    dependsOn runtimeMcpRemapTask
+    from(productionJarTask.flatMap { it.archiveFile })
+    from(runtimeTestProductionMods) {
+        include '*.jar'
+        exclude '*-sources.jar'
+    }
+    into(runtimeTestModsDir)
+    include '*.jar'
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+}
+
+tasks.register('stageRuntimeTestClientMods', Sync) {
+    dependsOn 'stageRuntimeTestMods'
+    from(runtimeTestSupportDir) {
+        include '*.jar'
+    }
+    into(runtimeTestClientModsDir)
+    include '*.jar'
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+}
+
+tasks.register('installRuntimeTestClient', JavaExec) {
+    dependsOn cleanroomInstaller
+    dependsOn 'stageRuntimeTestClientMods'
+    classpath = cleanroomInstaller
+    mainClass = 'net.minecraftforge.installer.SimpleInstaller'
+    def installDir = runtimeTestMinecraftDir.get().asFile
+    def profile = new File(
+        installDir,
+        "versions/${minecraftVersion}-Cleanroom-${cleanroomVersion}/" +
+        "${minecraftVersion}-Cleanroom-${cleanroomVersion}.json"
+    )
+    def cleanroomJar = new File(
+        installDir,
+        "libraries/com/cleanroommc/cleanroom/${cleanroomVersion}/" +
+        "cleanroom-${cleanroomVersion}.jar"
+    )
+    def marker = layout.buildDirectory.file('runtime-test/cleanroom-client-installed.marker').get().asFile
+    onlyIf {
+        !marker.exists()
+            || marker.text.trim() != "${minecraftVersion}-Cleanroom-${cleanroomVersion}"
+            || !profile.isFile()
+            || !cleanroomJar.isFile()
+    }
+    doFirst {
+        installDir.mkdirs()
+        def launcherProfiles = new File(installDir, 'launcher_profiles.json')
+        if (!launcherProfiles.exists()) {
+            launcherProfiles.text = '{"profiles":{},"selectedProfile":""}'
+        }
+        args '--install-client', installDir.absolutePath
+    }
+    doLast {
+        marker.parentFile.mkdirs()
+        marker.text = "${minecraftVersion}-Cleanroom-${cleanroomVersion}\n"
+    }
+}
+
+tasks.register('printRuntimeTestPaths') {
+    doLast {
+        println "runtimeTestModsDir=${runtimeTestModsDir.get().asFile.absolutePath}"
+        println "runtimeTestMinecraftDir=${runtimeTestMinecraftDir.get().asFile.absolutePath}"
+        println "runtimeTestProductionMods=${runtimeTestProductionMods.files*.absolutePath}"
+    }
+}
+
+spotless {
+    java {
+        target 'src/main/java/**/*.java'
+        leadingTabsToSpaces()
+        endWithNewline()
+        removeUnusedImports()
+    }
+}
+
+def curseforgeProjectId = findProperty('curseforge_project_id')
+if (curseforgeProjectId != null && !curseforgeProjectId.toString().isBlank()) {
+    curseforgeProjectId = curseforgeProjectId.toString().trim()
+    if (!curseforgeProjectId.matches('\\d+')) {
+        throw new GradleException(
+            "Property curseforge_project_id must be a numeric CurseForge project id: ${curseforgeProjectId}"
+        )
+    }
+    def curseforgeReleaseType = findProperty('curseforge_release_type')
+    if (curseforgeReleaseType == null || curseforgeReleaseType.toString().isBlank()) {
+        def detectedVersion = propertyString('mod_version').toLowerCase()
+        if (detectedVersion.contains('alpha')) {
+            curseforgeReleaseType = 'alpha'
+        } else if (detectedVersion.contains('beta') || detectedVersion.contains('pre') || detectedVersion.contains('rc')) {
+            curseforgeReleaseType = 'beta'
+        } else {
+            curseforgeReleaseType = 'release'
+        }
+    } else {
+        curseforgeReleaseType = curseforgeReleaseType.toString().toLowerCase().trim()
+    }
+    if (!['alpha', 'beta', 'release'].contains(curseforgeReleaseType)) {
+        throw new GradleException(
+            "Property curseforge_release_type must be one of alpha, beta, release: ${curseforgeReleaseType}"
+        )
+    }
+
+    setDefaultProperty('curseforge_game_versions', false, '1.12.2,Forge,Java 25,Client,Server')
+    def curseforgeGameVersions = propertyStringList('curseforge_game_versions', ',')
+        .collect { it.trim() }
+        .findAll { !it.isBlank() }
+    if (curseforgeGameVersions.isEmpty()) {
+        throw new GradleException('Property curseforge_game_versions must define at least one CurseForge game version tag!')
+    }
+
+    def curseforgeRelationTypes = [
+        'curseforge_relations_required': 'requiredDependency',
+        'curseforge_relations_optional': 'optionalDependency',
+        'curseforge_relations_embedded': 'embeddedLibrary',
+        'curseforge_relations_incompatible': 'incompatible',
+        'curseforge_relations_tool': 'tool'
+    ]
+    def curseforgeRelations = [:]
+    curseforgeRelationTypes.each { propertyKey, relationType ->
+        setDefaultProperty(propertyKey, false, '')
+        def slugs = propertyStringList(propertyKey)
+        if (!slugs.isEmpty()) {
+            curseforgeRelations.put(relationType, slugs)
+        }
+    }
+
+    def curseforgeChangelogFile = null
+    def curseforgeChangelogProperty = findProperty('curseforge_changelog_file')
+    if (curseforgeChangelogProperty != null && !curseforgeChangelogProperty.toString().isBlank()) {
+        curseforgeChangelogFile = file(curseforgeChangelogProperty.toString())
+    } else if (file('CHANGELOG.md').isFile()) {
+        curseforgeChangelogFile = file('CHANGELOG.md')
+    }
+    setDefaultProperty('curseforge_debug_mode', false, 'false')
+
+    tasks.register('publishCurseForge', net.darkhax.curseforgegradle.TaskPublishCurseForge) {
+        dependsOn tasks.named('build')
+        group = 'publishing'
+        description = "Publishes the production mod jar to CurseForge project ${curseforgeProjectId}."
+        apiToken = providers.environmentVariable('CURSEFORGE_TOKEN')
+        debugMode = propertyBool('curseforge_debug_mode')
+        def mainFile = upload(curseforgeProjectId, productionJarTask.get())
+        mainFile.releaseType = curseforgeReleaseType
+        mainFile.changelogType = 'markdown'
+        if (curseforgeChangelogFile != null) {
+            mainFile.changelog = curseforgeChangelogFile
+        }
+        curseforgeGameVersions.each { mainFile.addGameVersion(it) }
+        curseforgeRelations.each { relationType, slugs ->
+            mainFile.addRelations(relationType, slugs as String[])
+        }
+    }
+
+    def curseforgeAddon = file('addon.gradle')
+    if (curseforgeAddon.isFile()) {
+        apply from: curseforgeAddon
+        logger.lifecycle("Applied CurseForge addon script: ${curseforgeAddon}")
+    }
+}

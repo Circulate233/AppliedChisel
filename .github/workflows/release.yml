@@ -1,0 +1,17 @@
+name: Release tagged build
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  release:
+    uses: FormlessDragon/.github/.github/workflows/release-mdg.yml@main
+    secrets: inherit
+    permissions:
+      contents: write
+      actions: write

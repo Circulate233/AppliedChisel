@@ -24,7 +24,7 @@ public class ClientProxy extends CommonProxy {
     @Override
     public @Nullable Object getClientGuiElement(int ID, EntityPlayer player, World world, int x, int y, int z) {
         var t = world.getTileEntity(new BlockPos(x, y, z));
-        if (t instanceof TileEntityAEChisel a) {
+        if (ID == 0 && t instanceof TileEntityAEChisel a) {
             return new GuiAEChisel(player.inventory, a);
         }
         return null;
