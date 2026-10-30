@@ -33,12 +33,245 @@ def mappingsAttribute = Attribute.of(
     'com.gtnewhorizons.retrofuturagradle.obfuscation',
     String
 )
-runtimeTestProductionMods.attributes {
+def runtimeProductionAttributes = {
     attribute(mappingsAttribute, 'srg')
     attribute(
             Usage.USAGE_ATTRIBUTE,
         objects.named(Usage, 'java-runtime')
     )
+}
+runtimeTestProductionMods.attributes(runtimeProductionAttributes)
+
+// ModDevGradle can resolve a named `dev` classifier for runtime tests. Replace
+// it with the production SRG artifact before staging the Cleanroom instance.
+def runtimeTestReobfMods = configurations.maybeCreate('runtimeTestReobfMods')
+runtimeTestReobfMods.canBeConsumed = false
+runtimeTestReobfMods.canBeResolved = true
+runtimeTestReobfMods.attributes(runtimeProductionAttributes)
+
+def runtimeTestNamedModJars = configurations.maybeCreate('runtimeTestNamedModJars')
+runtimeTestNamedModJars.canBeConsumed = false
+runtimeTestNamedModJars.canBeResolved = true
+
+def namedRuntimeTestMods = []
+runtimeTestProductionMods.allDependencies
+    .withType(ExternalModuleDependency)
+    .each { dependency ->
+        def devArtifact = dependency.artifacts.find { it.classifier == 'dev' }
+        if (devArtifact == null) {
+            return
+        }
+        dependencies.add(
+            runtimeTestReobfMods.name,
+            "${dependency.group}:${dependency.name}:${dependency.version}"
+        ) {
+            transitive = false
+        }
+        dependencies.add(
+            runtimeTestNamedModJars.name,
+            "${dependency.group}:${dependency.name}:${dependency.version}:" +
+                "${devArtifact.classifier}@${devArtifact.extension}"
+        ) {
+            transitive = false
+        }
+        namedRuntimeTestMods << "${dependency.group}:${dependency.name}:" +
+            "${dependency.version}"
+    }
+
+def namedRuntimeTestJarNames = providers.provider {
+    runtimeTestNamedModJars.files.collect { it.name } as Set
+}
+def isNamedRuntimeTestJar = { String fileName ->
+    namedRuntimeTestJarNames.get().contains(fileName)
+}
+
+def remappedRuntimeTestModsDir =
+    layout.buildDirectory.dir('runtime-test/remapped-mods')
+def isNamedMinecraftJar = { File jar ->
+    def srgNames = new HashSet<String>()
+    def mcRefs = new HashSet<String>()
+    def zf = new java.util.zip.ZipFile(jar)
+    try {
+        zf.entries().each { entry ->
+            if (!entry.name.endsWith('.class')) {
+                return
+            }
+            def text = new String(
+                zf.getInputStream(entry).withCloseable { it.getBytes() },
+                'ISO-8859-1'
+            )
+            (text =~ /(?:func|field)_\d+_[A-Za-z0-9_]+/).each { srgNames << it }
+            (text =~ /net\/minecraft\/[a-zA-Z0-9_\/]+/).each { mcRefs << it }
+        }
+    } finally {
+        zf.close()
+    }
+    if (mcRefs.isEmpty()) {
+        return false
+    }
+    return srgNames.size() * 2 < mcRefs.size()
+}
+def namedRuntimeTestJars = {
+    def substituted = namedRuntimeTestJarNames.get()
+    runtimeTestProductionMods.files.findAll {
+        it.name.endsWith('.jar') &&
+            !it.name.endsWith('-sources.jar') &&
+            !substituted.contains(it.name) &&
+            isNamedMinecraftJar(it)
+    }
+}
+
+def namedRuntimeTestRemapTasks = []
+def cleanRemappedRuntimeTestMods = tasks.register('runtimeTestCleanRemappedMods') {
+    def outputDir = remappedRuntimeTestModsDir.get().asFile
+    def expectedNames = providers.provider {
+        namedRuntimeTestJars().collect { it.name } as Set
+    }
+    inputs.property('expectedNames', expectedNames.map { it.sort().join(',') })
+    doLast {
+        if (!outputDir.isDirectory()) {
+            return
+        }
+        def keep = expectedNames.get()
+        outputDir.listFiles()?.each { stale ->
+            if (!keep.contains(stale.name)) {
+                stale.delete()
+            }
+        }
+    }
+}
+
+def rewriteAccessTransformer = { File mappingFile, String text ->
+    def fields = [:]
+    def methods = [:]
+    mappingFile.eachLine('UTF-8') { String line ->
+        if (line.startsWith('FD: ')) {
+            def parts = line.substring(4).split(' ')
+            if (parts.length >= 2) {
+                fields[parts[0]] = parts[1]
+            }
+        } else if (line.startsWith('MD: ')) {
+            def parts = line.substring(4).split(' ')
+            if (parts.length >= 4) {
+                methods[parts[0] + ' ' + parts[1]] = parts[2] + ' ' + parts[3]
+            }
+        }
+    }
+    def out = new StringBuilder()
+    text.split('\r?\n', -1).each { String raw ->
+        def matcher = raw =~ /^(\s*\S+\s+)(\S+)(\s+)([^#]*?)(\s*#.*)?$/
+        if (!matcher.matches()) {
+            out.append(raw).append('\n')
+            return
+        }
+        def prefix = matcher.group(1)
+        def dotted = matcher.group(2)
+        def gap = matcher.group(3)
+        def member = matcher.group(4)?.trim() ?: ''
+        def comment = matcher.group(5) ?: ''
+        def owner = dotted.replace('.', '/')
+        def renamed = member
+        def signature = member =~ /^([A-Za-z0-9_$]+)(\(.*)$/
+        if (signature.matches()) {
+            def key = owner + '/' + signature.group(1) + ' ' + signature.group(2)
+            if (methods.containsKey(key)) {
+                renamed = methods[key].split(' ')[0].tokenize('/').last() +
+                    signature.group(2)
+            }
+        } else if (member && !member.contains('(')) {
+            def key = owner + '/' + member
+            if (fields.containsKey(key)) {
+                renamed = fields[key].tokenize('/').last()
+            }
+        }
+        out.append(prefix).append(dotted).append(gap).append(renamed)
+            .append(comment).append('\n')
+    }
+    out.toString()
+}
+def rewriteAccessTransformersInJar = { File mappingFile, File jar ->
+    def entries = [:]
+    def order = []
+    def source = new java.util.zip.ZipFile(jar)
+    try {
+        source.entries().each { entry ->
+            if (entry.directory) {
+                return
+            }
+            order << entry.name
+            if (entry.name.startsWith('META-INF/') &&
+                    entry.name.endsWith('_at.cfg')) {
+                entries[entry.name] = rewriteAccessTransformer(
+                    mappingFile,
+                    new String(
+                        source.getInputStream(entry)
+                            .withCloseable { it.getBytes() },
+                        'UTF-8'
+                    )
+                )
+            } else {
+                entries[entry.name] = source.getInputStream(entry)
+                    .withCloseable { it.getBytes() }
+            }
+        }
+    } finally {
+        source.close()
+    }
+    if (entries.keySet().every { !it.startsWith('META-INF/') ||
+            !it.endsWith('_at.cfg') }) {
+        return false
+    }
+    def target = new java.util.zip.ZipOutputStream(
+        new java.io.FileOutputStream(jar)
+    )
+    try {
+        order.each { name ->
+            def bytes = entries[name]
+            def entry = new java.util.zip.ZipEntry(name)
+            entry.time = 0L
+            target.putNextEntry(entry)
+            target.write(bytes as byte[])
+            target.closeEntry()
+        }
+    } finally {
+        target.close()
+    }
+    return true
+}
+
+afterEvaluate {
+    def remapJarType = tasks.getByName('reobfJar').class
+    namedRuntimeTestJars().each { jar ->
+        namedRuntimeTestRemapTasks << tasks.register(
+            'runtimeTestRemap' + jar.name.replaceAll('[^A-Za-z0-9]', '_'),
+            remapJarType
+        ) { task ->
+            task.dependsOn cleanRemappedRuntimeTestMods
+            task.input = layout.file(providers.provider { jar })
+            task.archiveFileName.set(jar.name)
+            task.destinationDirectory.set(remappedRuntimeTestModsDir)
+            task.libraries.from(sourceSets.main.compileClasspath)
+            obfuscation.configureNamedToSrgOperation(task.remapOperation)
+            task.doLast {
+                rewriteAccessTransformersInJar(
+                    obfuscation.namedToSrgMappings.get().asFile,
+                    task.archiveFile.get().asFile
+                )
+            }
+        }
+    }
+}
+
+def remapNamedRuntimeTestMods = tasks.register('runtimeTestRemapNamedMods') {
+    dependsOn cleanRemappedRuntimeTestMods
+    dependsOn namedRuntimeTestRemapTasks
+    outputs.dir(remappedRuntimeTestModsDir)
+    doLast {
+        logger.lifecycle(
+            "[RuntimeTest] Remapped ${namedRuntimeTestRemapTasks.size()} named " +
+                'jar(s) to SRG'
+        )
+    }
 }
 def runtimeTestModsDir = providers.gradleProperty('runtimeTestModsDir')
     .map { file(it) }
@@ -53,20 +286,44 @@ def runtimeMcpRemapMarker = layout.buildDirectory.file(
 )
 
 def runtimeMcpRemapTask = tasks.register('runtimeTestRemapMcp') {
+    dependsOn remapNamedRuntimeTestMods
     inputs.files(runtimeTestProductionMods)
-    inputs.property('runtimeRemapSchema', 'moddevgradle-mcp-runtime-classpath-v1')
+    inputs.files(runtimeTestNamedModJars)
+    inputs.files(runtimeTestReobfMods)
+    inputs.dir(remappedRuntimeTestModsDir)
+    inputs.property('runtimeRemapSchema', 'moddevgradle-runtime-production-variants-v3')
     outputs.file(runtimeMcpRemapMarker)
     doLast {
+        def dropped = namedRuntimeTestJars()
+        def substituted = namedRuntimeTestJarNames.get()
         def files = runtimeTestProductionMods.files.findAll {
             it.name.endsWith('.jar') && !it.name.endsWith('-sources.jar')
+        }.findAll { !dropped.any { d -> d.name == it.name } }
+            .findAll { !substituted.contains(it.name) }
+        def reobfFiles = runtimeTestReobfMods.files.findAll {
+            it.name.endsWith('.jar') && !it.name.endsWith('-sources.jar')
         }
+        def remappedFiles = remappedRuntimeTestModsDir.get().asFile.listFiles()
+            ?.findAll { it.name.endsWith('.jar') } ?: []
         runtimeMcpRemapMarker.get().asFile.with {
             parentFile.mkdirs()
-            text = files.collect { it.name }.sort().join('\n') + '\n'
+            text = (files + reobfFiles + remappedFiles)
+                .collect { it.name }.sort().join('\n') + '\n'
         }
         logger.lifecycle(
-            "[RuntimeTest] ModDevGradle supplied ${files.size()} runtime mod variant(s)"
+            "[RuntimeTest] Production variants: ${files.size()}, " +
+                "reobfuscated substitutions: ${reobfFiles.size()}, " +
+                "remapped: ${remappedFiles.size()}"
         )
+        if (reobfFiles.size() != namedRuntimeTestMods.size()) {
+            throw new GradleException(
+                "[RuntimeTest] ${namedRuntimeTestMods.size()} mod(s) declare a " +
+                    "'dev' classifier (${namedRuntimeTestMods.join(', ')}) but only " +
+                    "${reobfFiles.size()} reobfuscated artifact(s) were resolved. " +
+                    'Publish an artifact without the dev classifier, or drop the ' +
+                    'dependency from the production runtime test.'
+            )
+        }
     }
 }
 
@@ -77,10 +334,45 @@ tasks.register('stageRuntimeTestMods', Sync) {
     from(runtimeTestProductionMods) {
         include '*.jar'
         exclude '*-sources.jar'
+        exclude { isNamedRuntimeTestJar(it.name) }
+        exclude {
+            it.file.name.endsWith('.jar') && isNamedMinecraftJar(it.file)
+        }
+    }
+    from(runtimeTestReobfMods) {
+        include '*.jar'
+        exclude '*-sources.jar'
+    }
+    from(remappedRuntimeTestModsDir) {
+        include '*.jar'
     }
     into(runtimeTestModsDir)
     include '*.jar'
     duplicatesStrategy = DuplicatesStrategy.FAIL
+    doLast {
+        def stagedNames = destinationDir.listFiles()
+            ?.findAll { it.isFile() && it.name.endsWith('.jar') }
+            ?.collect { it.name } as Set ?: [] as Set
+        def leakedNamedJars = runtimeTestNamedModJars.files.findAll {
+            stagedNames.contains(it.name)
+        }
+        if (!leakedNamedJars.isEmpty()) {
+            throw new GradleException(
+                "[RuntimeTest] Named development jar(s) were staged: " +
+                    leakedNamedJars.collect { it.name }.join(', ')
+            )
+        }
+        def missingReobfuscatedJars = runtimeTestReobfMods.files.findAll {
+            it.name.endsWith('.jar') && !it.name.endsWith('-sources.jar') &&
+                !stagedNames.contains(it.name)
+        }
+        if (!missingReobfuscatedJars.isEmpty()) {
+            throw new GradleException(
+                "[RuntimeTest] Reobfuscated replacement jar(s) were not staged: " +
+                    missingReobfuscatedJars.collect { it.name }.join(', ')
+            )
+        }
+    }
 }
 
 tasks.register('stageRuntimeTestClientMods', Sync) {
@@ -135,6 +427,8 @@ tasks.register('printRuntimeTestPaths') {
         println "runtimeTestModsDir=${runtimeTestModsDir.get().asFile.absolutePath}"
         println "runtimeTestMinecraftDir=${runtimeTestMinecraftDir.get().asFile.absolutePath}"
         println "runtimeTestProductionMods=${runtimeTestProductionMods.files*.absolutePath}"
+        println "runtimeTestReobfMods=${runtimeTestReobfMods.files*.absolutePath}"
+        println "runtimeTestNamedModJars=${runtimeTestNamedModJars.files*.absolutePath}"
     }
 }
 
